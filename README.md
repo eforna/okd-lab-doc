@@ -25,5 +25,5 @@ Gitea (it12-devops) → Jenkins → Harbor → OKD (it12-okd)
 
 ## Fitxers de configuració
 
-Consulta el repo [it12-okd](https://github.com/efornaguera/it12-okd)
+Consulta el repo [it12-okd](https://github.com/eforna/it12-okd)
 per als manifests i scripts del servidor.
