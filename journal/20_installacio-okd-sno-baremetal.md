@@ -13,7 +13,7 @@
 | Hostname | `it12-okd` |
 | IP estàtica | `192.168.2.4` |
 | Gateway | `192.168.2.1` |
-| DNS primari | `192.168.2.4` (Synology NAS) |
+| DNS primari | `192.168.2.1` (GL-MT3000 · AdGuard Home) |
 | DNS secundari | `8.8.8.8` |
 | Clúster OKD | `okd.devops.lab` |
 | API endpoint | `api.okd.devops.lab` |
@@ -89,7 +89,7 @@ Abans d'instal·lar res al servidor, cal afegir els registres DNS necessaris per
 
 ### 1.1 Afegir registres A per a OKD
 
-**DSM → DNS Server → Zones → devops.net → Edit → Resource Records**
+**AdGuard Home → Filters → DNS Rewrites** (GL-MT3000 · `192.168.2.1`)
 
 Crear els tres registres següents:
 
@@ -99,20 +99,20 @@ Crear els tres registres següents:
 | `api-int.okd.devops.lab` | A | `192.168.2.4` |
 | `*.apps.okd.devops.lab` | A (wildcard) | `192.168.2.4` |
 
-> ⚠️ El registre wildcard `*.apps.okd.devops.net` és imprescindible per a les rutes de les aplicacions desplegades a OKD.
+> ⚠️ El registre wildcard `*.apps.okd.devops.lab` és imprescindible per a les rutes de les aplicacions desplegades a OKD.
 
 ### 1.2 Verificar resolució DNS des del MacBook
 
 ```bash
-nslookup api.okd.devops.net 192.168.2.2
+nslookup api.okd.devops.lab 192.168.2.1
 # Ha de retornar: 192.168.2.4
 
-nslookup test.apps.okd.devops.net 192.168.2.2
+nslookup test.apps.okd.devops.lab 192.168.2.1
 # Ha de retornar: 192.168.2.4
-nslookup api.okd.devops.lab 192.168.2.2
+nslookup api.okd.devops.lab 192.168.2.1
 # Ha de retornar: 192.168.2.4
 
-nslookup test.apps.okd.devops.lab 192.168.2.2
+nslookup test.apps.okd.devops.lab 192.168.2.1
 # Ha de retornar: 192.168.2.4
 
 ✅ Si ambdues consultes retornen `192.168.2.4`, el DNS està correctament configurat.
@@ -174,8 +174,8 @@ ssh-keygen -t rsa -b 4096 -N "" -f ~/.ssh/id_rsa
 
 L'`agent-config.yaml` necessita la MAC de la targeta de xarxa del IT12.
 
-**Opció A — Des del router/Synology** (si el IT12 té algun SO arrencant):
-- DSM → Network Center → DHCP → busca `192.168.2.4` o el hostname `it12-okd`
+**Opció A — Des del router GL-MT3000** (si el IT12 té algun SO arrencant):
+- LuCI / GL-MT3000 admin → `192.168.2.1` → Network → DHCP → busca `192.168.2.4` o el hostname `it12-okd`
 
 **Opció B — Si el IT12 té Ubuntu o qualsevol Linux**:
 ```bash
@@ -201,7 +201,7 @@ cd ~/okd-install
 
 cat > install-config.yaml << 'EOF'
 apiVersion: v1
-baseDomain: devops.net
+baseDomain: devops.lab
 metadata:
   name: okd
 compute:
@@ -267,7 +267,7 @@ hosts:
       dns-resolver:
         config:
           server:
-            - 192.168.2.2
+            - 192.168.2.1
             - 8.8.8.8
       routes:
         config:
@@ -347,7 +347,7 @@ openshift-install agent wait-for install-complete --dir=. --log-level=info
 INFO Install complete!
 INFO To access the cluster as the system:admin user when using 'oc', run
 INFO     export KUBECONFIG=/root/okd-install/auth/kubeconfig
-INFO Access the OpenShift web-console here: https://console-openshift-console.apps.okd.devops.net
+INFO Access the OpenShift web-console here: https://console-openshift-console.apps.okd.devops.lab
 INFO Login to the console with user: kubeadmin, and password: XXXXX-XXXXX-XXXXX-XXXXX
 ```
 
@@ -432,14 +432,14 @@ oc adm policy add-cluster-role-to-user cluster-admin admin
 Cal obrir el navegador a:
 
 ```
-https://console-openshift-console.apps.okd.devops.net
+https://console-openshift-console.apps.okd.devops.lab
 ```
 
 - **Usuari inicial:** `kubeadmin`
 - **Contrasenya:** la que es va mostrar al final de la instal·lació
 - **Usuari admin permanent:** `admin` (configurat al pas anterior)
 
-> ✅ Si no resol el domini, cal comprovar que el MacBook tingui el DNS configurat a `192.168.2.2`.  
+> ✅ Si no resol el domini, cal comprovar que el MacBook tingui el DNS configurat a `192.168.2.1`.  
 > Vegeu el document [14_Configurar DNS manual.md](14_Configurar%20DNS%20manual.md)
 
 ### 7.5 Afegir Harbor com a registry de confiança
@@ -448,12 +448,12 @@ OKD necessita confiar en el registry Harbor (que utilitza un certificat autosign
 
 ```bash
 # Obtenir el certificat de Harbor
-openssl s_client -showcerts -connect harbor.devops.net:443 </dev/null 2>/dev/null \
+openssl s_client -showcerts -connect harbor.devops.lab:443 </dev/null 2>/dev/null \
   | openssl x509 -outform PEM > /tmp/harbor-ca.crt
 
 # Crear ConfigMap amb el certificat
 oc create configmap harbor-registry-trust \
-  --from-file=harbor.devops.net=/tmp/harbor-ca.crt \
+  --from-file=harbor.devops.lab=/tmp/harbor-ca.crt \
   -n openshift-config
 
 # Configurar OKD per confiar en Harbor
@@ -476,7 +476,7 @@ oc new-project demo-app
 
 ```bash
 # Substituir per la imatge real construïda per Jenkins i pujada a Harbor
-oc new-app harbor.devops.net/demo/spring-backend:latest \
+oc new-app harbor.devops.lab/demo/spring-backend:latest \
   --name=spring-backend \
   -n demo-app
 
@@ -485,20 +485,20 @@ oc expose svc/spring-backend -n demo-app
 
 # Verificar la ruta
 oc get route spring-backend -n demo-app
-# URL: http://spring-backend-demo-app.apps.okd.devops.net
+# URL: http://spring-backend-demo-app.apps.okd.devops.lab
 ```
 
 ### 8.3 Desplegar una imatge de frontend (Angular)
 
 ```bash
-oc new-app harbor.devops.net/demo/angular-frontend:latest \
+oc new-app harbor.devops.lab/demo/angular-frontend:latest \
   --name=angular-frontend \
   -n demo-app
 
 oc expose svc/angular-frontend -n demo-app
 
 oc get route angular-frontend -n demo-app
-# URL: http://angular-frontend-demo-app.apps.okd.devops.net
+# URL: http://angular-frontend-demo-app.apps.okd.devops.lab
 ```
 
 ### 8.4 Verificar els pods
@@ -519,7 +519,7 @@ oc logs deployment/spring-backend -n demo-app
 git push → Gitea → Jenkins pipeline
               │
               │ 1. docker build
-              │ 2. docker push harbor.devops.net/<project>/<app>:<build>
+              │ 2. docker push harbor.devops.lab/<project>/<app>:<build>
               ▼
            Harbor Registry
               │
@@ -551,9 +551,9 @@ oc create token jenkins -n demo-app --duration=8760h
 pipeline {
   agent any
   environment {
-    HARBOR_URL = "harbor.devops.net"
+    HARBOR_URL = "harbor.devops.lab"
     IMAGE_NAME = "${HARBOR_URL}/demo/spring-backend"
-    OKD_API    = "https://api.okd.devops.net:6443"
+    OKD_API    = "https://api.okd.devops.lab:6443"
   }
   stages {
     stage('Build') {
@@ -607,9 +607,9 @@ oc get route grafana -n openshift-monitoring
 ```
 
 URLs disponibles un cop configurat el DNS:
-- Prometheus: `https://prometheus-k8s-openshift-monitoring.apps.okd.devops.net`
-- Grafana: `https://grafana-openshift-monitoring.apps.okd.devops.net`
-- AlertManager: `https://alertmanager-main-openshift-monitoring.apps.okd.devops.net`
+- Prometheus: `https://prometheus-k8s-openshift-monitoring.apps.okd.devops.lab`
+- Grafana: `https://grafana-openshift-monitoring.apps.okd.devops.lab`
+- AlertManager: `https://alertmanager-main-openshift-monitoring.apps.okd.devops.lab`
 
 ---
 
@@ -632,8 +632,8 @@ oc get pods -A | grep -v Running | grep -v Completed
 
 ```bash
 # Des del servidor OKD
-nslookup api.okd.devops.net 192.168.2.2
-nslookup console-openshift-console.apps.okd.devops.net 192.168.2.2
+nslookup api.okd.devops.lab 192.168.2.1
+nslookup console-openshift-console.apps.okd.devops.lab 192.168.2.1
 
 # Verificar la configuració de DNS al node
 cat /etc/resolv.conf
@@ -670,11 +670,11 @@ df -h /var/lib/containers
 
 | Servei | URL |
 |--------|-----|
-| Consola web OKD | `https://console-openshift-console.apps.okd.devops.net` |
-| API Kubernetes | `https://api.okd.devops.net:6443` |
-| Prometheus | `https://prometheus-k8s-openshift-monitoring.apps.okd.devops.net` |
-| Grafana | `https://grafana-openshift-monitoring.apps.okd.devops.net` |
-| AlertManager | `https://alertmanager-main-openshift-monitoring.apps.okd.devops.net` |
+| Consola web OKD | `https://console-openshift-console.apps.okd.devops.lab` |
+| API Kubernetes | `https://api.okd.devops.lab:6443` |
+| Prometheus | `https://prometheus-k8s-openshift-monitoring.apps.okd.devops.lab` |
+| Grafana | `https://grafana-openshift-monitoring.apps.okd.devops.lab` |
+| AlertManager | `https://alertmanager-main-openshift-monitoring.apps.okd.devops.lab` |
 
 ---
 
