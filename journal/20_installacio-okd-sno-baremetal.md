@@ -2,7 +2,7 @@
 
 **Versió OKD:** 4.16 — `4.16.0-okd-scos.1` (Single Node OKD — SNO)  
 **Sistema base:** CentOS Stream CoreOS — SCOS (instal·lat automàticament per l'Agent-Based Installer)  
-**Data:** 10 de març de 2026  
+**Data:** 17 de març de 2026  
 
 ---
 
@@ -83,9 +83,9 @@ Developer (MacBook/Portàtil)
 
 ---
 
-## ✅ FASE 1 — Preparació prèvia: DNS al Synology
+## ✅ FASE 1 — Preparació prèvia: DNS al GL-MT3000
 
-Abans d'instal·lar res al servidor, cal afegir els registres DNS necessaris per a OKD al Synology.
+Abans d'instal·lar res al servidor, cal afegir els registres DNS necessaris per a OKD al GL-MT3000 (AdGuard Home).
 
 ### 1.1 Afegir registres A per a OKD
 
@@ -109,14 +109,9 @@ nslookup api.okd.devops.lab 192.168.2.1
 
 nslookup test.apps.okd.devops.lab 192.168.2.1
 # Ha de retornar: 192.168.2.4
-nslookup api.okd.devops.lab 192.168.2.1
-# Ha de retornar: 192.168.2.4
-
-nslookup test.apps.okd.devops.lab 192.168.2.1
-# Ha de retornar: 192.168.2.4
+```
 
 ✅ Si ambdues consultes retornen `192.168.2.4`, el DNS està correctament configurat.
-```
 
 ---
 
@@ -166,7 +161,12 @@ ls ~/.ssh/id_rsa.pub
 
 # Si no existeix, crear-la:
 ssh-keygen -t rsa -b 4096 -N "" -f ~/.ssh/id_rsa
+
+# Assegurar permisos correctes (obligatori a macOS)
+chmod 600 ~/.ssh/id_rsa
 ```
+
+> ⚠️ Si `ssh core@192.168.2.4` retorna `Load key Permission denied`, executa `chmod 600 ~/.ssh/id_rsa`.
 
 ---
 
@@ -187,8 +187,7 @@ ip link show
 
 **Opció C — Sticker físic** a la caixa o placa base del GEEKOM IT12.
 
-> Cal anotar la MAC i el nom de la interfície (normalment `enp3s0` o `eno1`).  
-> **Exemple:** `38:f7:cd:d6:c9:4b`
+> MAC real del IT12: `38:F7:CD:D6:C9:4B` · Interfície: `enp87s0`
 
 ---
 
@@ -237,9 +236,9 @@ echo "  $(cat ~/.ssh/id_rsa.pub)" >> install-config.yaml
 
 ### 4.2 Crear `agent-config.yaml`
 
-> ℹ️ S'utilitza DHCP en lloc de IP estàtica al yaml (nmstatectl no disponible a macOS).
+> ℹ️ S'utilitza DHCP en lloc de IP estàtica al yaml (`nmstatectl` no disponible a macOS).
 > La IP fixa `192.168.2.4` es garanteix via **reserva DHCP al GL-MT3000** per la MAC `38:F7:CD:D6:C9:4B`.
-> MAC real del IT12 ja anotada. Interfície: `enp3s0`.
+> Interfície real del IT12: `enp87s0`.
 
 ```bash
 cat > agent-config.yaml << 'EOF'
@@ -252,7 +251,7 @@ hosts:
   - hostname: it12-okd
     role: master
     interfaces:
-      - name: enp3s0
+      - name: enp87s0
         macAddress: "38:F7:CD:D6:C9:4B"
 EOF
 ```
@@ -282,26 +281,40 @@ ls -lh agent.x86_64.iso
 
 > ⏳ Triga 1-2 minuts. Genera el fitxer `agent.x86_64.iso` al directori actual.
 
-### 5.2 Copiar la ISO a l'USB Ventoy
+### 5.2 Escriure la ISO a l'USB
 
-Amb Ventoy **no cal `dd`** — simplement copia el fitxer ISO a la partició Ventoy:
+> ⚠️ **Ventoy NO és compatible amb CoreOS/SCOS** — provoca error `Unit sysroot.mount not found` en arrencar.
+> Cal escriure la ISO directament amb `dd`.
 
-**Des del MacBook** (si l'USB Ventoy és visible com a volum):
 ```bash
-cp ~/okd-install/agent.x86_64.iso /Volumes/Ventoy/
+# Identificar el disc USB
+diskutil list
+# Busca l'USB a /dev/diskX (ex: /dev/disk4)
+
+# Desmuntar l'USB
+diskutil unmountDisk /dev/disk4
+
+# Escriure la ISO (substitueix disk4 pel teu disc)
+sudo dd if=/Users/edu/okd-install/agent.x86_64.iso of=/dev/rdisk4 bs=4m status=progress
+
+# Expulsar
+diskutil eject /dev/disk4
 ```
 
-**O des del portàtil Windows** (arrossega i deixa anar, o copia/enganxa):
-- Primer transfereix la ISO del MacBook al Windows via xarxa o USB addicional
-- Després copia `agent.x86_64.iso` a l'arrel de la partició Ventoy
+> ℹ️ Usa `/dev/rdisk4` (amb `r`) — és significativament més ràpid que `/dev/disk4`.
 
 ### 5.3 Arrencar el IT12 des de l'USB
 
-1. Cal connectar l'USB Ventoy al GEEKOM IT12.
-2. Cal engegar el servidor i prémer **F7** (o **DEL**) per al menú d'arrancada.
-3. Cal seleccionar l'USB com a dispositiu d'arrancada.
-4. Ventoy mostrarà la ISO → cal seleccionar **`agent.x86_64.iso`**.
-5. El sistema arrenca i comença la instal·lació automàtica de CentOS Stream CoreOS (SCOS) + OKD.
+1. Connecta l'USB al GEEKOM IT12.
+2. Engega el servidor i prem **F7** repetidament per al menú d'arrancada.
+3. Selecciona **`USB CDROM UEFI`** (no Legacy).
+4. El sistema arrenca i comença la instal·lació automàtica de SCOS + OKD.
+
+**Configuració BIOS necessària:**
+| Opció | Valor |
+|-------|-------|
+| Secure Boot | **Disabled** |
+| Boot Mode | **UEFI** |
 
 > ⚠️ A partir d'aquí **no cal fer res al servidor**. La instal·lació és completament automàtica (30-60 min).
 
@@ -366,7 +379,7 @@ oc version
 
 # Configurar accés (copiant el kubeconfig del servidor)
 mkdir -p ~/.kube
-scp edu@192.168.2.4:~/okd-install/auth/kubeconfig ~/.kube/config
+cp ~/okd-install/auth/kubeconfig ~/.kube/config
 
 # Verificar
 oc get nodes
@@ -375,8 +388,8 @@ oc get nodes
 ### 7.3 Crear usuari administrador (HTPasswd)
 
 ```bash
-# Instal·lar htpasswd
-sudo dnf install -y httpd-tools
+# Instal·lar htpasswd (macOS)
+brew install httpd
 
 # Crear fitxer d'usuaris
 htpasswd -c -B ~/okd-htpasswd admin
