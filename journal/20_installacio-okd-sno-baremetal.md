@@ -175,7 +175,7 @@ ssh-keygen -t rsa -b 4096 -N "" -f ~/.ssh/id_rsa
 L'`agent-config.yaml` necessita la MAC de la targeta de xarxa del IT12.
 
 **Opció A — Des del router GL-MT3000** (si el IT12 té algun SO arrencant):
-- LuCI / GL-MT3000 admin → `192.168.2.1` → Network → DHCP → busca `192.168.2.4` o el hostname `it12-okd`
+- `http://192.168.2.1` → Clients → busca `192.168.2.4` o el hostname `it12-okd`
 
 **Opció B — Si el IT12 té Ubuntu o qualsevol Linux**:
 ```bash
@@ -188,7 +188,7 @@ ip link show
 **Opció C — Sticker físic** a la caixa o placa base del GEEKOM IT12.
 
 > Cal anotar la MAC i el nom de la interfície (normalment `enp3s0` o `eno1`).  
-> **Exemple:** `aa:bb:cc:dd:ee:ff`
+> **Exemple:** `38:f7:cd:d6:c9:4b`
 
 ---
 
@@ -237,8 +237,9 @@ echo "  $(cat ~/.ssh/id_rsa.pub)" >> install-config.yaml
 
 ### 4.2 Crear `agent-config.yaml`
 
-> ⚠️ Cal substituir `AA:BB:CC:DD:EE:FF` per la MAC real obtinguda a la FASE 3.  
-> Cal substituir `enp3s0` pel nom real de la interfície si és diferent.
+> ℹ️ S'utilitza DHCP en lloc de IP estàtica al yaml (nmstatectl no disponible a macOS).
+> La IP fixa `192.168.2.4` es garanteix via **reserva DHCP al GL-MT3000** per la MAC `38:F7:CD:D6:C9:4B`.
+> MAC real del IT12 ja anotada. Interfície: `enp3s0`.
 
 ```bash
 cat > agent-config.yaml << 'EOF'
@@ -252,28 +253,7 @@ hosts:
     role: master
     interfaces:
       - name: enp3s0
-        macAddress: "AA:BB:CC:DD:EE:FF"
-    networkConfig:
-      interfaces:
-        - name: enp3s0
-          type: ethernet
-          state: up
-          ipv4:
-            enabled: true
-            address:
-              - ip: 192.168.2.4
-                prefix-length: 24
-            dhcp: false
-      dns-resolver:
-        config:
-          server:
-            - 192.168.2.1
-            - 8.8.8.8
-      routes:
-        config:
-          - destination: 0.0.0.0/0
-            next-hop-address: 192.168.2.1
-            next-hop-interface: enp3s0
+        macAddress: "38:F7:CD:D6:C9:4B"
 EOF
 ```
 
